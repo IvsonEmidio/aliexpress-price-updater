@@ -66,11 +66,17 @@ public class AliExpressPriceService {
             // If not in main frame, check iframes
             if (recaptchaElement == null) {
                 for (Frame frame : page.frames()) {
-                    if (frame.content().contains("We need to check if you are a robot")) {
+                    if (frame.querySelector("[data-sitekey]") != null) {
+                        logger.info("Found reCAPTCHA in iframe");
                         recaptchaElement = frame.querySelector("[data-sitekey]");
                         break;
                     }
                 }
+            }
+
+            if (recaptchaElement == null) {
+                logger.info("No reCAPTCHA found");
+                return;
             }
 
             String siteKey = recaptchaElement.getAttribute("data-sitekey");
