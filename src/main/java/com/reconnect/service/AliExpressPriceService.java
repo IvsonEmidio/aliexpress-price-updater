@@ -60,7 +60,21 @@ public class AliExpressPriceService {
 
     private void handleCaptcha(Page page) {
         try {
+            // First try to find captcha in main frame
             ElementHandle recaptchaElement = page.querySelector("[data-sitekey]");
+            Frame captchaFrame = null;
+
+            // If not in main frame, check iframes
+            if (recaptchaElement == null) {
+                for (Frame frame : page.frames()) {
+                    if (frame.content().contains("We need to check if you are a robot")) {
+                        captchaFrame = frame;
+                        recaptchaElement = frame.querySelector("[data-sitekey]");
+                        break;
+                    }
+                }
+            }
+
             if (recaptchaElement == null) {
                 logger.debug("No reCAPTCHA element found");
                 return;
@@ -110,9 +124,26 @@ public class AliExpressPriceService {
 
     private boolean isCaptchaPresent(Page page) {
         try {
-            ElementHandle captcha = page.querySelector("[data-sitekey], #nocaptcha, .geetest_holder");
-            return captcha != null;
+            // First check main frame
+            if (page.querySelector("[data-sitekey], #nocaptcha, .geetest_holder") != null) {
+                return true;
+            }
+
+            // Check all iframes for captcha
+            for (Frame frame : page.frames()) {
+                try {
+                    String frameContent = frame.content();
+                    if (frameContent.contains("We need to check if you are a robot")) {
+                        logger.info("Found captcha in iframe");
+                        return true;
+                    }
+                } catch (Exception e) {
+                    logger.debug("Error checking iframe: {}", e.getMessage());
+                }
+            }
+            return false;
         } catch (Exception e) {
+            logger.debug("Error checking for captcha: {}", e.getMessage());
             return false;
         }
     }
