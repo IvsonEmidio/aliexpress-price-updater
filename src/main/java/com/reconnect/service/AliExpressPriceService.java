@@ -58,30 +58,60 @@ public class AliExpressPriceService {
                     }}));
     }
 
-    private void handleCaptcha(Page page) {
+    private boolean isCaptchaPresent(Page page) {
         try {
-            // First try to find captcha in main frame
-            ElementHandle recaptchaElement = page.querySelector("[data-sitekey]");
-
-            // If not in main frame, check iframes
-            if (recaptchaElement == null) {
-                for (Frame frame : page.frames()) {
-                    String frameContent = frame.content();
-                    if (frameContent.contains("We need to check if you are a robot")) {
-                        logger.info("Found reCAPTCHA in iframe");
-                        recaptchaElement = frame.querySelector("[data-sitekey]");
-                        break;
+            // Check all frames recursively
+            for (Frame frame : page.frames()) {
+                try {
+                    if (frame.url().contains("acs.aliexpress.com") && 
+                        frame.url().contains("punish")) {
+                        logger.info("Found AliExpress captcha iframe");
+                        return true;
                     }
+                } catch (Exception e) {
+                    logger.debug("Error checking iframe: {}", e.getMessage());
                 }
             }
+            return false;
+        } catch (Exception e) {
+            logger.debug("Error checking for captcha: {}", e.getMessage());
+            return false;
+        }
+    }
 
+    private void handleCaptcha(Page page) {
+        try {
+            // Find the outer punish iframe
+            Frame outerFrame = page.frames().stream()
+                .filter(f -> f.url().contains("acs.aliexpress.com") && 
+                           f.url().contains("punish"))
+                .findFirst()
+                .orElse(null);
+
+            if (outerFrame == null) {
+                logger.info("No captcha iframe found");
+                return;
+            }
+
+            // Find the inner iframe that contains the actual reCAPTCHA
+            Frame innerFrame = outerFrame.childFrames().stream()
+                .filter(f -> f.url().contains("recaptcha=1"))
+                .findFirst()
+                .orElse(null);
+
+            if (innerFrame == null) {
+                logger.info("No reCAPTCHA iframe found");
+                return;
+            }
+
+            ElementHandle recaptchaElement = innerFrame.querySelector("[data-sitekey]");
             if (recaptchaElement == null) {
-                logger.info("No reCAPTCHA found");
+                logger.info("No reCAPTCHA element found in iframe");
                 return;
             }
 
             String siteKey = recaptchaElement.getAttribute("data-sitekey");
-            String pageUrl = page.url();
+            String pageUrl = innerFrame.url();
 
             logger.info("Found reCAPTCHA with site key: {}", siteKey);
 
@@ -97,54 +127,21 @@ public class AliExpressPriceService {
                 String response = captcha.getCode();
                 logger.info("Received captcha solution");
 
-                // Execute JavaScript to set the captcha response
-                page.evaluate("(response) => {" +
-                        "window.grecaptcha.enterprise.getResponse = () => response;" +
-                        "document.querySelector('form').submit();" +
-                        "}", response);
+                // Execute JavaScript in the correct iframe context
+                innerFrame.evaluate("(response) => {" +
+                    "window.grecaptcha.enterprise.getResponse = () => response;" +
+                    "document.querySelector('form').submit();" +
+                    "}", response);
 
-                // Wait for navigation after form submission
                 Thread.sleep(5000);
                 logger.info("Captcha solved and submitted successfully");
-            } catch (ValidationException e) {
-                logger.error("Invalid parameters passed: {}", e.getMessage());
-            } catch (NetworkException e) {
-                logger.error("Network error occurred: {}", e.getMessage());
-            } catch (ApiException e) {
-                logger.error("API error: {}", e.getMessage());
-            } catch (TimeoutException e) {
-                logger.error("Captcha solving timeout: {}", e.getMessage());
+            } catch (ValidationException | NetworkException | ApiException | TimeoutException e) {
+                logger.error("Captcha solving error: {}", e.getMessage());
             }
 
         } catch (Exception e) {
             logger.error("Error solving captcha: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to solve captcha", e);
-        }
-    }
-
-    private boolean isCaptchaPresent(Page page) {
-        try {
-            // First check main frame
-            if (page.querySelector("[data-sitekey], #nocaptcha, .geetest_holder") != null) {
-                return true;
-            }
-
-            // Check all iframes for captcha
-            for (Frame frame : page.frames()) {
-                try {
-                    String frameContent = frame.content();
-                    if (frameContent.contains("We need to check if you are a robot")) {
-                        logger.info("Found captcha in iframe");
-                        return true;
-                    }
-                } catch (Exception e) {
-                    logger.debug("Error checking iframe: {}", e.getMessage());
-                }
-            }
-            return false;
-        } catch (Exception e) {
-            logger.debug("Error checking for captcha: {}", e.getMessage());
-            return false;
         }
     }
 
