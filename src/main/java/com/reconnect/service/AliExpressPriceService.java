@@ -66,7 +66,8 @@ public class AliExpressPriceService {
             // If not in main frame, check iframes
             if (recaptchaElement == null) {
                 for (Frame frame : page.frames()) {
-                    if (frame.querySelector("[data-sitekey]") != null) {
+                    String frameContent = frame.content();
+                    if (frameContent.contains("We need to check if you are a robot")) {
                         logger.info("Found reCAPTCHA in iframe");
                         recaptchaElement = frame.querySelector("[data-sitekey]");
                         break;
