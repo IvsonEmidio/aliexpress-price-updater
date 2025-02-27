@@ -1,6 +1,6 @@
 package com.reconnect;
 
-import com.reconnect.model.Product;
+import com.reconnect.domain.Product;
 import com.reconnect.service.ProductService;
 import com.reconnect.service.AliExpressPriceService;
 import lombok.extern.slf4j.Slf4j;
@@ -8,28 +8,46 @@ import lombok.extern.slf4j.Slf4j;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 
 @Slf4j
 public class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         ProductService productService = new ProductService();
-        AliExpressPriceService priceService = new AliExpressPriceService();
-        Random random = new Random();
-        
+        AliExpressPriceService aliexpressPriceService = new AliExpressPriceService();
+
         try {
             List<Product> products = productService.getAllProducts();
             
             for (Product product : products) {
                 try {
-                    String link = product.getLink() + """
-                            ?pdp_ext_f=%7B"sku_id":"
-                            """ + product.getSkuId() + """
-                                    "%7D
-                                    """;
-
+                    String link = productService.getProductLink(product);
                     log.info("Processing product: {}", product);
-                    Optional<BigDecimal> price = priceService.getPriceFromUrl(link);
+                    
+                    Optional<BigDecimal> price = Optional.empty();
+                    int retries = 0;
+                    int maxRetries = 3;
+                    
+                    while (price.isEmpty() && retries < maxRetries) {
+                        try {
+                            price = aliexpressPriceService.getPriceFromUrl(link);
+                            if (price.isEmpty()) {
+                                retries++;
+
+                                if (retries < maxRetries) {
+                                    log.info("Retry {} of {} for product {}", 
+                                        retries, maxRetries, product.getId());
+                                    Thread.sleep(5000);
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.error("Error on attempt {} for product {}: {}", 
+                                retries + 1, product.getId(), e.getMessage());
+                            retries++;
+                            if (retries < maxRetries) {
+                                Thread.sleep(5000);
+                            }
+                        }
+                    }
                     
                     price.ifPresentOrElse(
                         p -> {
@@ -45,21 +63,19 @@ public class Main {
                                 priceInCentsLong
                             );
                         },
-                        () -> log.error("Failed to fetch price for product {}", product.getId())
+                        () -> log.error("Failed to fetch price for product {} after {} attempts", 
+                            product.getId(), maxRetries)
                     );
                     
-                    // Random delay between 1 and 7 seconds
-                    int delay = random.nextInt(6000) + 1000;
-                    log.debug("Waiting for {} milliseconds before next request", delay);
-                    Thread.sleep(delay);
-                } catch (Exception e) {
+                    Thread.sleep(5000);
+                } catch (Throwable e) {
                     log.error("Error processing product {}: {}", product.getId(), e.getMessage());
                 }
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("Error in main: {}", e.getMessage(), e);
         } finally {
-            priceService.close();
+            aliexpressPriceService.close();
         }
     }
 }

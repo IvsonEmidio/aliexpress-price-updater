@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.reconnect.config.AppConfig;
-import com.reconnect.model.Product;
+import com.reconnect.domain.Product;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -29,17 +29,18 @@ public class ProductService {
         try {
             logger.startOperation("getAllProducts");
             logger.debug("Fetching all products from API");
-            
+
             String response = httpService.get(
-                apiBaseUrl + "/api/products",
-                Map.of("Content-Type", "application/json")
+                    apiBaseUrl + "/api/products",
+                    Map.of("Content-Type", "application/json")
             );
-            
+
             List<Product> products = objectMapper.readValue(
-                response, 
-                new TypeReference<List<Product>>() {}
+                    response,
+                    new TypeReference<List<Product>>() {
+                    }
             );
-            
+
             logger.info("Successfully fetched {} products", products.size());
             return products;
         } catch (Exception e) {
@@ -54,20 +55,20 @@ public class ProductService {
         try {
             logger.startOperation("updateProductPrice");
             logger.debug("Updating price for product {} to {} cents", productId, priceInCents);
-            
+
             var updateRequest = Map.of(
-                "id", productId,
-                "link", productLink,
-                "price", priceInCents
+                    "id", productId,
+                    "link", productLink,
+                    "price", priceInCents
             );
-            
+
             String requestBody = objectMapper.writeValueAsString(updateRequest);
             String response = httpService.put(
-                apiBaseUrl + "/api/products",
-                requestBody,
-                Map.of("Content-Type", "application/json")
+                    apiBaseUrl + "/api/products",
+                    requestBody,
+                    Map.of("Content-Type", "application/json")
             );
-            
+
             logger.info("Successfully updated price for product {}", productId);
             logger.debug("Price update response: {}", response);
         } catch (Exception e) {
@@ -76,5 +77,13 @@ public class ProductService {
         } finally {
             logger.endOperation("updateProductPrice");
         }
+    }
+
+    public String getProductLink(Product product) {
+        return product.getLink() + """
+                ?pdp_ext_f=%7B"sku_id":"
+                """ + product.getSkuId() + """
+                "%7D
+                """;
     }
 } 

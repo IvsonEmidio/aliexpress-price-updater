@@ -27,7 +27,6 @@ public class HttpService {
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(30));
 
-            // Add headers if present
             if (headers != null) {
                 headers.forEach(requestBuilder::header);
             }
@@ -52,7 +51,6 @@ public class HttpService {
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(30));
 
-            // Add headers if present
             if (headers != null) {
                 headers.forEach(requestBuilder::header);
             }
@@ -77,7 +75,6 @@ public class HttpService {
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(30));
 
-            // Add headers if present
             if (headers != null) {
                 headers.forEach(requestBuilder::header);
             }

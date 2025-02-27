@@ -2,19 +2,17 @@ package com.reconnect.service;
 
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.LoadState;
+import com.reconnect.config.AppConfig;
 import com.twocaptcha.TwoCaptcha;
 import com.twocaptcha.captcha.ReCaptcha;
-import com.twocaptcha.exceptions.ApiException;
-import com.twocaptcha.exceptions.NetworkException;
-import com.twocaptcha.exceptions.ValidationException;
 
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Arrays;
@@ -26,157 +24,94 @@ public class AliExpressPriceService {
     private final BrowserContext browser;
     private final LoggingService logger;
     private final TwoCaptcha solver;
-    private static final String CAPTCHA_API_KEY = "5e4f767365f9d5ef9f26ef77f616a9a1";
 
     public AliExpressPriceService() {
         this.logger = new LoggingService(AliExpressPriceService.class);
-        this.solver = new TwoCaptcha(CAPTCHA_API_KEY);
+        this.solver = new TwoCaptcha(AppConfig.getInstance().getCaptchaApiKey());
         playwright = Playwright.create();
-        // Enhanced stealth settings
-        browser = playwright.chromium().launchPersistentContext(Path.of("./browser-data"), 
+
+        browser = playwright.chromium().launchPersistentContext(Path.of("./browser-data"),
                 new BrowserType.LaunchPersistentContextOptions()
-                    .setLocale("pt-BR")
-                    .setHeadless(true)
-                    .setTimezoneId("America/Sao_Paulo")
-                    .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-                    .setViewportSize(1920, 1080)
-                    .setDeviceScaleFactor(1)
-                    .setHasTouch(false)
-                    .setJavaScriptEnabled(true)
-                    .setIgnoreHTTPSErrors(true)
-                    .setBypassCSP(true)
-                    .setArgs(Arrays.asList("--disable-blink-features=AutomationControlled"))
-                    .setExtraHTTPHeaders(new HashMap<>() {{
-                        put("sec-ch-ua", "\"Not A(Brand\";v=\"99\", \"Google Chrome\";v=\"121\", \"Chromium\";v=\"121\"");
-                        put("sec-ch-ua-platform", "\"Windows\"");
-                        put("sec-ch-ua-mobile", "?0");
-                        put("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7");
-                        put("sec-fetch-site", "none");
-                        put("sec-fetch-mode", "navigate");
-                        put("sec-fetch-user", "?1");
-                        put("sec-fetch-dest", "document");
-                    }}));
-    }
-
-    private boolean isCaptchaPresent(Page page) {
-        try {
-            // Check all frames recursively
-            for (Frame frame : page.frames()) {
-                try {
-                    if (frame.url().contains("acs.aliexpress.com") && 
-                        frame.url().contains("punish")) {
-                        logger.info("Found AliExpress captcha iframe");
-                        return true;
-                    }
-                } catch (Exception e) {
-                    logger.debug("Error checking iframe: {}", e.getMessage());
-                }
-            }
-            return false;
-        } catch (Exception e) {
-            logger.debug("Error checking for captcha: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    private void handleCaptcha(Page page) {
-        try {
-            // Find the outer punish iframe
-            Frame outerFrame = page.frames().stream()
-                .filter(f -> f.url().contains("acs.aliexpress.com") && 
-                           f.url().contains("punish"))
-                .findFirst()
-                .orElse(null);
-
-            if (outerFrame == null) {
-                logger.info("No captcha iframe found");
-                return;
-            }
-
-            // Find the inner iframe that contains the actual reCAPTCHA
-            Frame innerFrame = outerFrame.childFrames().stream()
-                .filter(f -> f.url().contains("recaptcha=1"))
-                .findFirst()
-                .orElse(null);
-
-            if (innerFrame == null) {
-                logger.info("No reCAPTCHA iframe found");
-                return;
-            }
-
-            ElementHandle recaptchaElement = innerFrame.querySelector("[data-sitekey]");
-            if (recaptchaElement == null) {
-                logger.info("No reCAPTCHA element found in iframe");
-                return;
-            }
-
-            String siteKey = recaptchaElement.getAttribute("data-sitekey");
-            String pageUrl = innerFrame.url();
-
-            logger.info("Found reCAPTCHA with site key: {}", siteKey);
-
-            ReCaptcha captcha = new ReCaptcha();
-            captcha.setSiteKey(siteKey);
-            captcha.setUrl(pageUrl);
-            captcha.setInvisible(true);
-            captcha.setAction("verify");
-
-            try {
-                logger.info("Sending captcha to 2captcha service...");
-                solver.solve(captcha);
-                String response = captcha.getCode();
-                logger.info("Received captcha solution");
-
-                // Execute JavaScript in the correct iframe context
-                innerFrame.evaluate("(response) => {" +
-                    "window.grecaptcha.enterprise.getResponse = () => response;" +
-                    "document.querySelector('form').submit();" +
-                    "}", response);
-
-                Thread.sleep(5000);
-                logger.info("Captcha solved and submitted successfully");
-            } catch (ValidationException | NetworkException | ApiException | TimeoutException e) {
-                logger.error("Captcha solving error: {}", e.getMessage());
-            }
-
-        } catch (Exception e) {
-            logger.error("Error solving captcha: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to solve captcha", e);
-        }
+                        .setLocale("pt-BR")
+                        .setHeadless(false)
+                        .setTimezoneId("America/Sao_Paulo")
+                        .setUserAgent(
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+                        .setViewportSize(1920, 1080)
+                        .setDeviceScaleFactor(1)
+                        .setHasTouch(false)
+                        .setJavaScriptEnabled(true)
+                        .setIgnoreHTTPSErrors(true)
+                        .setBypassCSP(true)
+                        .setArgs(Arrays.asList(
+                                "--disable-blink-features=AutomationControlled",
+                                "--disable-web-security",
+                                "--disable-features=IsolateOrigins,site-per-process"
+                        ))
+                        .setExtraHTTPHeaders(new HashMap<>() {
+                            {
+                                put("sec-ch-ua",
+                                        "\"Not A(Brand\";v=\"99\", \"Google Chrome\";v=\"121\", \"Chromium\";v=\"121\"");
+                                put("sec-ch-ua-platform", "\"Windows\"");
+                                put("sec-ch-ua-mobile", "?0");
+                                put("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7");
+                                put("sec-fetch-site", "none");
+                                put("sec-fetch-mode", "navigate");
+                                put("sec-fetch-user", "?1");
+                                put("sec-fetch-dest", "document");
+                            }
+                        }));
     }
 
     public Optional<BigDecimal> getPriceFromUrl(String url) {
         Page page = null;
+
         try {
             logger.startOperation("getPriceFromUrl");
             logger.info("Starting price fetch for URL: {}", url);
-            
-            page = browser.newPage();
 
-            // Add random mouse movements and scrolling
+            page = browser.newPage();
             page.addInitScript("" +
-                "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });" +
-                "Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });" +
-                "Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en-US', 'en'] });"
-            );
+                    "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });" +
+                    "Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });" +
+                    "Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en-US', 'en'] });");
 
             logger.info("Navigating to URL: {}", url);
             page.navigate(url);
-            page.waitForLoadState(LoadState.DOMCONTENTLOADED, 
-                new Page.WaitForLoadStateOptions().setTimeout(30000));
+            page.waitForLoadState(LoadState.DOMCONTENTLOADED,
+                    new Page.WaitForLoadStateOptions().setTimeout(120000));
 
             simulateHumanBehavior(page);
 
-            int maxAttempts = 3;
-            for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            int maxCaptchaRetries = 3;
+            int captchaAttempt = 0;
+            boolean captchaSolved = false;
+
+            while (captchaAttempt < maxCaptchaRetries && !captchaSolved) {
                 if (isCaptchaPresent(page)) {
-                    logger.info("Captcha detected, attempting to solve (attempt {}/{})", attempt + 1, maxAttempts);
-                    handleCaptcha(page);
-                    // Wait a bit after solving captcha
-                    Thread.sleep(3000);
+                    try {
+                        handleCaptcha(page);
+
+                        page.waitForLoadState(LoadState.DOMCONTENTLOADED,
+                        new Page.WaitForLoadStateOptions().setTimeout(60000));
+                        
+                        Thread.sleep(5000);
+                        captchaSolved = !isCaptchaPresent(page);
+                        if (!captchaSolved) {
+                            logger.info("Captcha still present after attempt {}. Retrying...", captchaAttempt + 1);
+                        }
+                    } catch (Exception e) {
+                        logger.error("Captcha attempt {} failed: {}", captchaAttempt + 1, e.getMessage());
+                    }
+                    captchaAttempt++;
                 } else {
-                    break;
+                    captchaSolved = true;
                 }
+            }
+
+            if (!captchaSolved) {
+                logger.error("Failed to solve captcha after {} attempts", maxCaptchaRetries);
+                return Optional.empty();
             }
 
             return extractPriceWithRetry(page, 3);
@@ -197,17 +132,108 @@ public class AliExpressPriceService {
         }
     }
 
+    private boolean isCaptchaPresent(Page page) {
+        try {
+            for (Frame frame : page.frames()) {
+                if (frame.url().contains("acs.aliexpress.com")) {
+                    String content = frame.content();
+                    if (content.contains("We need to check if you are a robot.")) {
+                        logger.info("Found robot verification text in frame");
+                        return true;
+                    }
+                }
+            }
+
+            List<ElementHandle> captchaElements = page.querySelectorAll(
+                    "[data-sitekey], " +
+                            "#nocaptcha, " +
+                            ".geetest_holder, " +
+                            ".verify-wrap");
+
+            return !captchaElements.isEmpty();
+        } catch (Exception e) {
+            logger.error("Error checking for captcha presence: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private void handleCaptcha(Page page) {
+        try {
+            Frame captchaFrame = null;
+
+            for (Frame frame : page.frames()) {
+                frame.content();
+                String frameUrl = frame.url();
+
+                if (frameUrl.contains("acs.aliexpress.com") &&
+                        frameUrl.contains("punish") &&
+                        frameUrl.contains("recaptcha=1")) {
+                    captchaFrame = frame;
+                    logger.info("Found AliExpress captcha iframe");
+                    break;
+                }
+            }
+
+            if (captchaFrame != null) {
+                Thread.sleep(30000);
+
+                String content = captchaFrame.content();
+                Pattern pattern = Pattern.compile("sitekey:\"([^\"]+)\"");
+                Matcher matcher = pattern.matcher(content);
+
+                if (matcher.find()) {
+                    String siteKey = matcher.group(1);
+                    logger.info("Found reCAPTCHA site key: {}", siteKey);
+
+                    ReCaptcha captcha = new ReCaptcha();
+                    captcha.setSiteKey(siteKey);
+                    captcha.setUrl(captchaFrame.url());
+                    captcha.setInvisible(true);
+                    captcha.setAction("verify");
+
+                    try {
+                        logger.info("Sending captcha to 2captcha service...");
+                        solver.solve(captcha);
+                        String response = captcha.getCode();
+                        logger.info("Received captcha solution");
+
+                        logger.info("Injecting captcha response into page...");
+                        captchaFrame.addScriptTag(new Frame.AddScriptTagOptions()
+                            .setContent("(function() {" +
+                                "const response = '" + response + "';" +
+                                "const textarea = document.getElementById('g-recaptcha-response');" +
+                                "if (textarea) {" +
+                                "    console.log(___grecaptcha_cfg.clients);" +
+                                "    ___grecaptcha_cfg.clients[0].Z.Z.callback(response);" +
+                                "}" +
+                                "})();"));
+
+                        Thread.sleep(30000);
+                        logger.info("Captcha solved and submitted successfully");
+                    } catch (Exception e) {
+                        logger.error("2captcha error: {}", e.getMessage());
+                        throw e;
+                    }
+                } else {
+                    logger.error("Could not find reCAPTCHA site key in frame content");
+                }
+            } else {
+                logger.error("Could not find AliExpress captcha iframe");
+            }
+        } catch (Exception e) {
+            logger.error("Error handling captcha: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to handle captcha", e);
+        }
+    }
+
     private void simulateHumanBehavior(Page page) {
         try {
-            // Random scroll
             page.evaluate("window.scrollTo(0, Math.floor(Math.random() * 100));");
             Thread.sleep(1000);
-            
-            // Move mouse randomly
+
             page.mouse().move(100 + Math.random() * 100, 100 + Math.random() * 100);
             Thread.sleep(500);
-            
-            // More natural scroll
+
             page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2);");
             Thread.sleep(1000);
         } catch (Exception e) {
@@ -225,14 +251,13 @@ public class AliExpressPriceService {
 
         for (int attempt = 0; attempt < maxRetries; attempt++) {
             try {
-                Thread.sleep(2000); // Wait between attempts
-
+                Thread.sleep(6000);
                 for (String selector : priceSelectors) {
                     ElementHandle element = page.querySelector(selector);
                     if (element != null) {
                         String priceText = element.textContent();
                         logger.info("Found price with selector {}: {}", selector, priceText);
-                        
+
                         Pattern pattern = Pattern.compile("\\d+[.,]\\d+");
                         Matcher matcher = pattern.matcher(priceText);
 
@@ -251,7 +276,8 @@ public class AliExpressPriceService {
         return Optional.empty();
     }
 
-    public void close() {
+    public void close() throws InterruptedException {
+        Thread.sleep(30);
         try {
             browser.close();
             playwright.close();

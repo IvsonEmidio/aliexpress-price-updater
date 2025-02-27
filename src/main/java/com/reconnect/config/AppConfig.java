@@ -8,6 +8,7 @@ import java.util.Properties;
 public class AppConfig {
     private static AppConfig instance;
     private final String apiBaseUrl;
+    private final String captchaApiKey;
 
     private AppConfig() {
         Properties props = new Properties();
@@ -17,6 +18,7 @@ public class AppConfig {
             throw new RuntimeException("Failed to load application.properties", e);
         }
         this.apiBaseUrl = props.getProperty("api.base.url", "http://localhost:8080").trim();
+        this.captchaApiKey = props.getProperty("captcha.api.key").trim();
     }
 
     public static AppConfig getInstance() {

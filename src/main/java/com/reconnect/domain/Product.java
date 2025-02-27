@@ -1,4 +1,4 @@
-package com.reconnect.model;
+package com.reconnect.domain;
 
 import lombok.Data;
 import java.math.BigDecimal;

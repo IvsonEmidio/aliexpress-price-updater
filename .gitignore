@@ -36,3 +36,12 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Browser Data ###
+browser-data
+
+### Application Properties ###
+src/main/resources/application.properties
+
+### Logs
+logs/*
