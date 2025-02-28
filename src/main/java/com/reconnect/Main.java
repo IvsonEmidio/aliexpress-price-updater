@@ -3,6 +3,7 @@ package com.reconnect;
 import com.reconnect.domain.Product;
 import com.reconnect.service.ProductService;
 import com.reconnect.service.AliExpressPriceService;
+import com.reconnect.service.SmsService;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
@@ -69,6 +70,9 @@ public class Main {
                     
                     Thread.sleep(5000);
                 } catch (Throwable e) {
+                    String failTextMessage = "DALE BURRO ELTON, O PROCESSO DE BUSCAR PRECOS FALHOU VISSE, BOM DAR UMA OLHADA";
+                    SmsService.sendSms("5581988189893", failTextMessage);
+                    SmsService.sendSms("5581997417562", failTextMessage);
                     log.error("Error processing product {}: {}", product.getId(), e.getMessage());
                 }
             }

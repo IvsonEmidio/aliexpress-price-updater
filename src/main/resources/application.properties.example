@@ -1,2 +1,4 @@
 api.base.url=
-captcha.api.key= 
+captcha.api.key=
+vonage.api.key=
+vonage.api.secret=

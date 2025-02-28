@@ -9,6 +9,8 @@ public class AppConfig {
     private static AppConfig instance;
     private final String apiBaseUrl;
     private final String captchaApiKey;
+    private final String vonageApiKey;
+    private final String vonageApiSecret;
 
     private AppConfig() {
         Properties props = new Properties();
@@ -19,6 +21,8 @@ public class AppConfig {
         }
         this.apiBaseUrl = props.getProperty("api.base.url", "http://localhost:8080").trim();
         this.captchaApiKey = props.getProperty("captcha.api.key").trim();
+        this.vonageApiKey = props.getProperty("vonage.api.key").trim();
+        this.vonageApiSecret = props.getProperty("vonage.api.secret").trim();
     }
 
     public static AppConfig getInstance() {
