@@ -33,7 +33,7 @@ public class AliExpressPriceService {
         browser = playwright.chromium().launchPersistentContext(Path.of("./browser-data"),
                 new BrowserType.LaunchPersistentContextOptions()
                         .setLocale("pt-BR")
-                        .setHeadless(false)
+                        .setHeadless(true)
                         .setTimezoneId("America/Sao_Paulo")
                         .setUserAgent(
                                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
